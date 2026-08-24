@@ -24,6 +24,8 @@ type Point = {
   y: number;
 };
 
+type ResizeCorner = "nw" | "ne" | "se" | "sw";
+
 const A4_MARGIN_POINTS = (20 / 25.4) * 72;
 const EXPORT_PIXELS_PER_POINT = 2.5;
 const MINIMUM_SELECTION_PIXELS = 8;
@@ -52,7 +54,7 @@ const selectionGuidance = requireElement<HTMLElement>("#selection-guidance");
 const viewer = requireElement<HTMLElement>("#viewer");
 const loadingCard = requireElement<HTMLElement>("#loading-card");
 const loadingMessage = requireElement<HTMLElement>("#loading-message");
-const pageStage = requireElement<HTMLElement>("#page-stage");
+const pageStage = requireElement<HTMLButtonElement>("#page-stage");
 const pdfCanvas = requireElement<HTMLCanvasElement>("#pdf-canvas");
 const selectionBox = requireElement<HTMLElement>("#selection-box");
 const selectionLabel = requireElement<HTMLElement>("#selection-label");
@@ -97,9 +99,32 @@ function getNormalizedPointer(event: PointerEvent): Point {
   };
 }
 
+function getResizeOrigin(corner: ResizeCorner, currentSelection: Selection): Point {
+  switch (corner) {
+    case "nw":
+      return {
+        x: currentSelection.x + currentSelection.width,
+        y: currentSelection.y + currentSelection.height,
+      };
+    case "ne":
+      return {
+        x: currentSelection.x,
+        y: currentSelection.y + currentSelection.height,
+      };
+    case "se":
+      return { x: currentSelection.x, y: currentSelection.y };
+    case "sw":
+      return {
+        x: currentSelection.x + currentSelection.width,
+        y: currentSelection.y,
+      };
+  }
+}
+
 function clearSelection(): void {
   selection = null;
-  selectionBox.classList.remove("is-visible");
+  dragOrigin = null;
+  selectionBox.classList.remove("is-visible", "is-drawing", "is-resizing");
   exportButton.disabled = true;
   selectionGuidance.classList.remove("has-selection");
   selectionGuidance.innerHTML =
@@ -122,9 +147,15 @@ function updateSelectionDisplay(): void {
   const widthMillimeters = (baseViewport.width * selection.width * 25.4) / 72;
   const heightMillimeters = (baseViewport.height * selection.height * 25.4) / 72;
   selectionLabel.textContent = `${Math.round(widthMillimeters)} × ${Math.round(heightMillimeters)} mm`;
-  selectionGuidance.textContent = "Selection ready - drag again to replace it";
+  if (dragOrigin) {
+    selectionGuidance.textContent = selectionBox.classList.contains("is-resizing")
+      ? "Release to apply the new size"
+      : "Release to finish the selection";
+  } else {
+    selectionGuidance.textContent = "Drag a corner to resize, or drag elsewhere to replace";
+  }
   selectionGuidance.classList.add("has-selection");
-  exportButton.disabled = false;
+  exportButton.disabled = dragOrigin !== null;
 }
 
 function updateNavigation(): void {
@@ -419,9 +450,20 @@ pageStage.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   pageStage.focus({ preventScroll: true });
   pageStage.setPointerCapture(event.pointerId);
-  dragOrigin = getNormalizedPointer(event);
-  selection = { x: dragOrigin.x, y: dragOrigin.y, width: 0, height: 0 };
-  selectionBox.classList.add("is-visible", "is-drawing");
+  const handle =
+    event.target instanceof Element
+      ? event.target.closest<HTMLElement>("[data-resize-handle]")
+      : null;
+  const corner = handle?.dataset.resizeHandle as ResizeCorner | undefined;
+
+  if (corner && selection) {
+    dragOrigin = getResizeOrigin(corner, selection);
+    selectionBox.classList.add("is-resizing");
+  } else {
+    dragOrigin = getNormalizedPointer(event);
+    selection = { x: dragOrigin.x, y: dragOrigin.y, width: 0, height: 0 };
+    selectionBox.classList.add("is-visible", "is-drawing");
+  }
   updateSelectionDisplay();
 });
 
@@ -444,7 +486,7 @@ function finishSelection(event: PointerEvent): void {
     return;
   }
   dragOrigin = null;
-  selectionBox.classList.remove("is-drawing");
+  selectionBox.classList.remove("is-drawing", "is-resizing");
   if (pageStage.hasPointerCapture(event.pointerId)) {
     pageStage.releasePointerCapture(event.pointerId);
   }

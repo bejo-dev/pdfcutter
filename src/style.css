@@ -613,6 +613,57 @@ h1 {
   border-style: dashed;
 }
 
+.selection-box.is-resizing {
+  background: rgb(23 107 75 / 18%);
+}
+
+.resize-handle {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: var(--paper);
+  border: 2px solid var(--green);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgb(15 68 47 / 24%);
+  pointer-events: auto;
+  transition:
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.resize-handle:hover {
+  background: var(--green-soft);
+  transform: scale(1.16);
+}
+
+.resize-handle-nw {
+  top: -9px;
+  left: -9px;
+  cursor: nwse-resize;
+}
+
+.resize-handle-ne {
+  top: -9px;
+  right: -9px;
+  cursor: nesw-resize;
+}
+
+.resize-handle-se {
+  right: -9px;
+  bottom: -9px;
+  cursor: nwse-resize;
+}
+
+.resize-handle-sw {
+  bottom: -9px;
+  left: -9px;
+  cursor: nesw-resize;
+}
+
+.selection-box.is-drawing .resize-handle {
+  display: none;
+}
+
 .selection-label {
   position: absolute;
   top: -31px;
