@@ -1,0 +1,22 @@
+{
+  "name": "pdf-cutter",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "6.2.108"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.10",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}
