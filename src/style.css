@@ -531,11 +531,11 @@ h1 {
   min-height: 680px;
   max-height: calc(100vh - 292px);
   padding: 32px;
-  overflow: auto;
+  overflow: hidden;
   background-color: #e7e8e4;
   background-image: radial-gradient(#c9cec9 0.8px, transparent 0.8px);
   background-size: 15px 15px;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
 }
 

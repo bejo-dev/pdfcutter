@@ -71,6 +71,7 @@ let selection: Selection | null = null;
 let dragOrigin: Point | null = null;
 let resizeTimer: number | undefined;
 let lastViewerWidth = 0;
+let lastViewerHeight = 0;
 
 function setStatus(message: string, isError = false): void {
   statusMessage.textContent = message;
@@ -89,6 +90,19 @@ function formatFileSize(bytes: number): string {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+function getViewerContentSize(): { width: number; height: number } {
+  const styles = window.getComputedStyle(viewer);
+  const horizontalPadding =
+    Number.parseFloat(styles.paddingLeft) + Number.parseFloat(styles.paddingRight);
+  const verticalPadding =
+    Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
+
+  return {
+    width: Math.max(1, viewer.clientWidth - horizontalPadding),
+    height: Math.max(1, viewer.clientHeight - verticalPadding),
+  };
 }
 
 function getNormalizedPointer(event: PointerEvent): Point {
@@ -197,8 +211,13 @@ async function renderPage(pageNumber: number, preserveSelection = false): Promis
     }
 
     const baseViewport = page.getViewport({ scale: 1 });
-    const availableWidth = Math.max(260, Math.min(980, viewer.clientWidth - 64));
-    const displayScale = Math.min(1.5, availableWidth / baseViewport.width);
+    const viewerContentSize = getViewerContentSize();
+    const availableWidth = Math.min(980, viewerContentSize.width);
+    const displayScale = Math.min(
+      1.5,
+      availableWidth / baseViewport.width,
+      viewerContentSize.height / baseViewport.height,
+    );
     const viewport = page.getViewport({ scale: displayScale });
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2.5);
     const context = pdfCanvas.getContext("2d", { alpha: false });
@@ -228,6 +247,7 @@ async function renderPage(pageNumber: number, preserveSelection = false): Promis
     currentPageNumber = pageNumber;
     renderedPage = page;
     lastViewerWidth = viewer.clientWidth;
+    lastViewerHeight = viewer.clientHeight;
     renderTask = null;
     setRenderingState(false);
     updateNavigation();
@@ -516,7 +536,12 @@ pageStage.addEventListener("keydown", (event) => {
 exportButton.addEventListener("click", () => void exportSelection());
 
 const resizeObserver = new ResizeObserver(() => {
-  if (!pdfDocument || !renderedPage || Math.abs(viewer.clientWidth - lastViewerWidth) < 12) {
+  if (
+    !pdfDocument ||
+    !renderedPage ||
+    (Math.abs(viewer.clientWidth - lastViewerWidth) < 12 &&
+      Math.abs(viewer.clientHeight - lastViewerHeight) < 12)
+  ) {
     return;
   }
   window.clearTimeout(resizeTimer);
