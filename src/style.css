@@ -529,7 +529,6 @@ h1 {
   position: relative;
   display: flex;
   min-height: 680px;
-  max-height: calc(100vh - 292px);
   padding: 32px;
   overflow: hidden;
   background-color: #e7e8e4;
