@@ -13,9 +13,19 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
+      - name: Create deployment App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.BEJO_DEV_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BEJO_DEV_APP_PRIVATE_KEY }}
+          owner: bejo-dev
+          repositories: tools-deploy
+          permission-contents: write
+
       - name: Dispatch tool deployment
         env:
-          GH_TOKEN: ${{ secrets.DEPLOY_REPO_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           SOURCE_REF: ${{ github.ref }}
           SOURCE_SHA: ${{ github.sha }}
         run: |
