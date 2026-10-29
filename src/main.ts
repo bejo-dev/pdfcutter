@@ -59,6 +59,14 @@ const pdfCanvas = requireElement<HTMLCanvasElement>("#pdf-canvas");
 const selectionBox = requireElement<HTMLElement>("#selection-box");
 const selectionLabel = requireElement<HTMLElement>("#selection-label");
 const statusMessage = requireElement<HTMLElement>("#status-message");
+const previewDialog = requireElement<HTMLDialogElement>("#preview-dialog");
+const previewCanvas = requireElement<HTMLCanvasElement>("#preview-canvas");
+const positionGrid = requireElement<HTMLElement>("#position-grid");
+const rotationValue = requireElement<HTMLElement>("#rotation-value");
+const rotateLeftButton = requireElement<HTMLButtonElement>("#rotate-left");
+const rotateRightButton = requireElement<HTMLButtonElement>("#rotate-right");
+const previewCancelButton = requireElement<HTMLButtonElement>("#preview-cancel");
+const previewConfirmButton = requireElement<HTMLButtonElement>("#preview-confirm");
 
 let pdfDocument: PDFDocumentProxy | null = null;
 let renderedPage: PDFPageProxy | null = null;
@@ -332,7 +340,126 @@ function downloadBlob(blob: Blob, name: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-async function exportSelection(): Promise<void> {
+type PendingExport = {
+  sourceCanvas: HTMLCanvasElement;
+  rasterScale: number;
+  naturalWidth: number;
+  naturalHeight: number;
+};
+
+type PagePosition = {
+  column: 0 | 1 | 2;
+  row: 0 | 1 | 2;
+};
+
+const [A4_WIDTH, A4_HEIGHT] = PageSizes.A4;
+const PRINTABLE_WIDTH = A4_WIDTH - A4_MARGIN_POINTS * 2;
+const PRINTABLE_HEIGHT = A4_HEIGHT - A4_MARGIN_POINTS * 2;
+const POSITION_NAMES = ["Top", "Middle", "Bottom"] as const;
+const COLUMN_NAMES = ["left", "center", "right"] as const;
+
+let pendingExport: PendingExport | null = null;
+let rotatedCanvas: HTMLCanvasElement | null = null;
+let quarterTurns = 0;
+let pagePosition: PagePosition = { column: 0, row: 0 };
+
+function getFitScale(width: number, height: number): number {
+  return Math.min(1, PRINTABLE_WIDTH / width, PRINTABLE_HEIGHT / height);
+}
+
+function rotateCanvas(source: HTMLCanvasElement, turns: number): HTMLCanvasElement {
+  if (turns === 0) {
+    return source;
+  }
+  const isSideways = turns % 2 !== 0;
+  const target = document.createElement("canvas");
+  target.width = isSideways ? source.height : source.width;
+  target.height = isSideways ? source.width : source.height;
+  const context = target.getContext("2d", { alpha: false });
+  if (!context) {
+    throw new Error("Canvas export is not supported in this browser.");
+  }
+  context.translate(target.width / 2, target.height / 2);
+  context.rotate((turns * Math.PI) / 2);
+  context.drawImage(source, -source.width / 2, -source.height / 2);
+  return target;
+}
+
+/** Placement of the rotated crop on the A4 page, in points from the top-left corner. */
+function getPlacement(): { x: number; y: number; width: number; height: number } {
+  if (!pendingExport) {
+    throw new Error("No export is pending.");
+  }
+  const isSideways = quarterTurns % 2 !== 0;
+  const naturalWidth = isSideways ? pendingExport.naturalHeight : pendingExport.naturalWidth;
+  const naturalHeight = isSideways ? pendingExport.naturalWidth : pendingExport.naturalHeight;
+  const fitScale = getFitScale(naturalWidth, naturalHeight);
+  const width = naturalWidth * fitScale;
+  const height = naturalHeight * fitScale;
+  return {
+    x: A4_MARGIN_POINTS + ((PRINTABLE_WIDTH - width) * pagePosition.column) / 2,
+    y: A4_MARGIN_POINTS + ((PRINTABLE_HEIGHT - height) * pagePosition.row) / 2,
+    width,
+    height,
+  };
+}
+
+function updatePreview(): void {
+  if (!pendingExport) {
+    return;
+  }
+  rotatedCanvas = rotateCanvas(pendingExport.sourceCanvas, quarterTurns);
+  previewCanvas.width = rotatedCanvas.width;
+  previewCanvas.height = rotatedCanvas.height;
+  previewCanvas.getContext("2d")?.drawImage(rotatedCanvas, 0, 0);
+
+  const placement = getPlacement();
+  previewCanvas.style.left = `${(placement.x / A4_WIDTH) * 100}%`;
+  previewCanvas.style.top = `${(placement.y / A4_HEIGHT) * 100}%`;
+  previewCanvas.style.width = `${(placement.width / A4_WIDTH) * 100}%`;
+  previewCanvas.style.height = `${(placement.height / A4_HEIGHT) * 100}%`;
+  rotationValue.textContent = `${quarterTurns * 90}°`;
+
+  for (const button of positionGrid.querySelectorAll<HTMLButtonElement>("button")) {
+    const isSelected =
+      Number(button.dataset.column) === pagePosition.column &&
+      Number(button.dataset.row) === pagePosition.row;
+    button.setAttribute("aria-checked", String(isSelected));
+    button.tabIndex = isSelected ? 0 : -1;
+  }
+}
+
+function buildPositionGrid(): void {
+  for (const row of [0, 1, 2] as const) {
+    for (const column of [0, 1, 2] as const) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "position-cell";
+      button.setAttribute("role", "radio");
+      button.setAttribute("aria-label", `${POSITION_NAMES[row]} ${COLUMN_NAMES[column]}`);
+      button.dataset.column = String(column);
+      button.dataset.row = String(row);
+      button.addEventListener("click", () => {
+        pagePosition = { column, row };
+        updatePreview();
+      });
+      positionGrid.append(button);
+    }
+  }
+}
+
+function rotatePreview(direction: 1 | -1): void {
+  quarterTurns = (quarterTurns + direction + 4) % 4;
+  updatePreview();
+}
+
+function closePreview(): void {
+  previewDialog.close();
+  pendingExport = null;
+  rotatedCanvas = null;
+}
+
+async function openPreview(): Promise<void> {
   if (!renderedPage || !selection) {
     return;
   }
@@ -340,18 +467,17 @@ async function exportSelection(): Promise<void> {
   const selectedArea = { ...selection };
   exportButton.disabled = true;
   exportButton.classList.add("is-loading");
-  setStatus("Preparing your A4 PDF...");
+  setStatus("Preparing preview...");
 
   try {
     const baseViewport = renderedPage.getViewport({ scale: 1 });
     const naturalWidth = baseViewport.width * selectedArea.width;
     const naturalHeight = baseViewport.height * selectedArea.height;
-    const [a4Width, a4Height] = PageSizes.A4;
-    const printableWidth = a4Width - A4_MARGIN_POINTS * 2;
-    const printableHeight = a4Height - A4_MARGIN_POINTS * 2;
-    const fitScale = Math.min(1, printableWidth / naturalWidth, printableHeight / naturalHeight);
-    const placedWidth = naturalWidth * fitScale;
-    const placedHeight = naturalHeight * fitScale;
+    // Render for the larger of the two orientations so rotating never loses sharpness.
+    const fitScale = Math.max(
+      getFitScale(naturalWidth, naturalHeight),
+      getFitScale(naturalHeight, naturalWidth),
+    );
     const rasterScale = fitScale * EXPORT_PIXELS_PER_POINT;
     const exportViewport = renderedPage.getViewport({ scale: rasterScale });
     const cropCanvas = document.createElement("canvas");
@@ -377,7 +503,32 @@ async function exportSelection(): Promise<void> {
       background: "rgb(255, 255, 255)",
     }).promise;
 
-    const imageBlob = await canvasToBlob(cropCanvas);
+    pendingExport = { sourceCanvas: cropCanvas, rasterScale, naturalWidth, naturalHeight };
+    quarterTurns = 0;
+    pagePosition = { column: 0, row: 0 };
+    updatePreview();
+    previewDialog.showModal();
+    setStatus("");
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : "The preview could not be created.", true);
+  } finally {
+    exportButton.classList.remove("is-loading");
+    exportButton.disabled = !selection;
+  }
+}
+
+async function exportPendingSelection(): Promise<void> {
+  if (!pendingExport || !rotatedCanvas) {
+    return;
+  }
+
+  const placement = getPlacement();
+  const imageCanvas = rotatedCanvas;
+  previewConfirmButton.disabled = true;
+  previewConfirmButton.classList.add("is-loading");
+
+  try {
+    const imageBlob = await canvasToBlob(imageCanvas);
     const outputDocument = await PDFDocument.create();
     outputDocument.setCreator("PDF Cutter");
     outputDocument.setProducer("pdf-lib");
@@ -385,10 +536,10 @@ async function exportSelection(): Promise<void> {
     const image = await outputDocument.embedPng(await imageBlob.arrayBuffer());
     const outputPage = outputDocument.addPage(PageSizes.A4);
     outputPage.drawImage(image, {
-      x: A4_MARGIN_POINTS,
-      y: a4Height - A4_MARGIN_POINTS - placedHeight,
-      width: placedWidth,
-      height: placedHeight,
+      x: placement.x,
+      y: A4_HEIGHT - placement.y - placement.height,
+      width: placement.width,
+      height: placement.height,
     });
 
     const outputBytes = await outputDocument.save();
@@ -399,12 +550,14 @@ async function exportSelection(): Promise<void> {
       new Blob([outputBuffer], { type: "application/pdf" }),
       `${baseName}-selection-p${currentPageNumber}.pdf`,
     );
+    closePreview();
     setStatus("Your cropped A4 PDF has been downloaded.");
   } catch (error) {
+    closePreview();
     setStatus(error instanceof Error ? error.message : "The PDF could not be exported.", true);
   } finally {
-    exportButton.classList.remove("is-loading");
-    exportButton.disabled = !selection;
+    previewConfirmButton.classList.remove("is-loading");
+    previewConfirmButton.disabled = false;
   }
 }
 
@@ -521,7 +674,16 @@ pageStage.addEventListener("keydown", (event) => {
   }
 });
 
-exportButton.addEventListener("click", () => void exportSelection());
+buildPositionGrid();
+exportButton.addEventListener("click", () => void openPreview());
+rotateLeftButton.addEventListener("click", () => rotatePreview(-1));
+rotateRightButton.addEventListener("click", () => rotatePreview(1));
+previewCancelButton.addEventListener("click", closePreview);
+previewConfirmButton.addEventListener("click", () => void exportPendingSelection());
+previewDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closePreview();
+});
 
 const resizeObserver = new ResizeObserver(() => {
   if (!pdfDocument || !renderedPage || Math.abs(viewer.clientWidth - lastViewerWidth) < 12) {
