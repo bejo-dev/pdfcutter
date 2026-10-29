@@ -3,9 +3,10 @@
 A browser-only PDF cropper built with vanilla TypeScript. Open a PDF, navigate to a page,
 draw an axis-aligned rectangle, and export that section on a new single-page A4 PDF.
 
-The selected content is placed in the top-left of the output with 20 mm margins. It keeps
-its original physical size when possible and scales down proportionally if it is too large
-for the printable A4 area.
+Exporting opens a preview of the A4 page where the selection can be rotated in 90 degree
+steps and placed in any of nine positions (corners, edge middles, center) within 20 mm
+margins. The selection keeps its original physical size when possible and scales down
+proportionally if it is too large for the printable A4 area.
 
 ## Privacy
 

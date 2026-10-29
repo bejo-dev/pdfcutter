@@ -864,3 +864,136 @@ footer {
 .is-hidden {
   display: none;
 }
+
+.preview-dialog {
+  width: min(680px, calc(100% - 32px));
+  padding: 0;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.preview-dialog::backdrop {
+  background: rgb(23 37 31 / 45%);
+}
+
+.preview-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+}
+
+.preview-form h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.preview-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.preview-page {
+  position: relative;
+  width: 260px;
+  aspect-ratio: 210 / 297;
+  background: white;
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgb(31 48 40 / 14%);
+}
+
+.preview-page canvas {
+  position: absolute;
+  outline: 1px dashed rgb(23 107 75 / 45%);
+}
+
+.preview-controls {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control-group small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.control-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rotate-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.secondary-button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.secondary-button:hover {
+  background: var(--green-soft);
+}
+
+.secondary-button svg {
+  width: 16px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.position-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 40px);
+  gap: 6px;
+}
+
+.position-cell {
+  height: 40px;
+  cursor: pointer;
+  background: #f7f7f2;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.position-cell:hover {
+  background: var(--green-soft);
+}
+
+.position-cell[aria-checked="true"] {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
